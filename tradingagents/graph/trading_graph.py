@@ -138,10 +138,6 @@ class TradingAgentsGraph:
         kwargs = {}
         provider = self.config.get("llm_provider", "").lower()
 
-        max_tokens = self.config.get("max_tokens", 1024)
-        if max_tokens:
-            kwargs["max_tokens"] = max_tokens
-
         if provider == "google":
             thinking_level = self.config.get("google_thinking_level")
             if thinking_level:

@@ -61,6 +61,13 @@ class AgentState(MessagesState):
     ]
     fundamentals_report: Annotated[str, "Report from the Fundamentals Researcher"]
 
+    # tool round counters (bound the analyst<->tools loop so a looping model
+    # cannot starve the graph of reports)
+    market_rounds: Annotated[int, "Tool rounds used by the Market Analyst"]
+    social_rounds: Annotated[int, "Tool rounds used by the Social Media Analyst"]
+    news_rounds: Annotated[int, "Tool rounds used by the News Analyst"]
+    fundamentals_rounds: Annotated[int, "Tool rounds used by the Fundamentals Analyst"]
+
     # researcher team discussion step
     investment_debate_state: Annotated[
         InvestDebateState, "Current state of the debate on if to invest or not"

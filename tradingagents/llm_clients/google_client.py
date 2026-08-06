@@ -1,4 +1,3 @@
-import os
 from typing import Any, Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -35,13 +34,8 @@ class GoogleClient(BaseLLMClient):
             if key in self.kwargs:
                 llm_kwargs[key] = self.kwargs[key]
 
-        # Unified api_key maps to provider-specific google_api_key, checking GOOGLE_API_KEY and GEMINI_API_KEY env vars
-        google_api_key = (
-            self.kwargs.get("api_key")
-            or self.kwargs.get("google_api_key")
-            or os.environ.get("GOOGLE_API_KEY")
-            or os.environ.get("GEMINI_API_KEY")
-        )
+        # Unified api_key maps to provider-specific google_api_key
+        google_api_key = self.kwargs.get("api_key") or self.kwargs.get("google_api_key")
         if google_api_key:
             llm_kwargs["google_api_key"] = google_api_key
 

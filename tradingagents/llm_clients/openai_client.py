@@ -21,27 +21,25 @@ class NormalizedChatOpenAI(ChatOpenAI):
 # Kwargs forwarded from user config to ChatOpenAI
 _PASSTHROUGH_KWARGS = (
     "timeout", "max_retries", "reasoning_effort",
-    "max_tokens", "temperature", "top_p",
     "api_key", "callbacks", "http_client", "http_async_client",
-    "extra_body", "model_kwargs",
 )
 
 # Provider base URLs and API key env vars
 _PROVIDER_CONFIG = {
     "xai": ("https://api.x.ai/v1", "XAI_API_KEY"),
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
-    "nvidia": ("https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY"),
     "ollama": ("http://localhost:11434/v1", None),
+    "nvidia": ("https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY"),
 }
 
 
 class OpenAIClient(BaseLLMClient):
-    """Client for OpenAI, Ollama, OpenRouter, NVIDIA, and xAI providers.
+    """Client for OpenAI, Ollama, OpenRouter, and xAI providers.
 
     For native OpenAI models, uses the Responses API (/v1/responses) which
     supports reasoning_effort with function tools across all model families
     (GPT-4.1, GPT-5). Third-party compatible providers (xAI, OpenRouter,
-    NVIDIA, Ollama) use standard Chat Completions.
+    Ollama) use standard Chat Completions.
     """
 
     def __init__(
@@ -62,14 +60,11 @@ class OpenAIClient(BaseLLMClient):
         if self.provider in _PROVIDER_CONFIG:
             base_url, api_key_env = _PROVIDER_CONFIG[self.provider]
             llm_kwargs["base_url"] = base_url
-            api_key = (
-                self.kwargs.get("api_key")
-                or self.kwargs.get(f"{self.provider}_api_key")
-                or (os.environ.get(api_key_env) if api_key_env else None)
-            )
-            if api_key:
-                llm_kwargs["api_key"] = api_key
-            elif not api_key_env:
+            if api_key_env:
+                api_key = os.environ.get(api_key_env)
+                if api_key:
+                    llm_kwargs["api_key"] = api_key
+            else:
                 llm_kwargs["api_key"] = "ollama"
         elif self.base_url:
             llm_kwargs["base_url"] = self.base_url
@@ -78,15 +73,6 @@ class OpenAIClient(BaseLLMClient):
         for key in _PASSTHROUGH_KWARGS:
             if key in self.kwargs:
                 llm_kwargs[key] = self.kwargs[key]
-
-        # Process extra_body / reasoning_budget / chat_template_kwargs (e.g. NVIDIA NIM thinking options)
-        extra_body = dict(llm_kwargs.get("extra_body") or {})
-        if "reasoning_budget" in self.kwargs:
-            extra_body["reasoning_budget"] = self.kwargs["reasoning_budget"]
-        if "chat_template_kwargs" in self.kwargs:
-            extra_body["chat_template_kwargs"] = self.kwargs["chat_template_kwargs"]
-        if extra_body:
-            llm_kwargs["extra_body"] = extra_body
 
         # Native OpenAI: use Responses API for consistent behavior across
         # all model families. Third-party providers use Chat Completions.

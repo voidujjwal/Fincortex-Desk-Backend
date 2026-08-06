@@ -4,6 +4,8 @@ import json
 from tradingagents.agents.utils.agent_utils import build_instrument_context, get_news
 from tradingagents.dataflows.config import get_config
 
+MAX_TOOL_ROUNDS = 6
+
 
 def create_social_media_analyst(llm):
     def social_media_analyst_node(state):
@@ -43,16 +45,68 @@ def create_social_media_analyst(llm):
 
         chain = prompt | llm.bind_tools(tools)
 
-        result = chain.invoke(state["messages"])
+        rounds = int(state.get("social_rounds") or 0) + 1
+        from langchain_core.messages import HumanMessage
+        if rounds <= MAX_TOOL_ROUNDS:
+            result = chain.invoke(state["messages"])
+            if result.tool_calls:
+                return {
+                    "messages": [result],
+                    "sentiment_report": "",
+                    "social_rounds": rounds,
+                }
+            if not (result.content or ""):
+                # Model bailed without calling tools — retry once with a
+                # forceful instruction so data gathering cannot be skipped.
+                result = chain.invoke(
+                    state["messages"]
+                    + [
+                        HumanMessage(
+                            "Do not answer yet. You MUST call the available tools "
+                            "to gather data before writing your report."
+                        )
+                    ]
+                )
+                if result.tool_calls:
+                    return {
+                        "messages": [result],
+                        "sentiment_report": "",
+                        "social_rounds": rounds,
+                    }
+        else:
+            result = llm.invoke(
+                state["messages"]
+                + [
+                    HumanMessage(
+                        "Tool data gathering is complete. Now write your "
+                        "comprehensive detailed report (markdown) based on the "
+                        "tool data gathered so far. Do not call any tools."
+                    )
+                ]
+            )
 
-        report = ""
-
-        if len(result.tool_calls) == 0:
-            report = result.content
+        report = result.content
+        if isinstance(report, list):
+            report = "\n".join(
+                block.get("text", "")
+                for block in report
+                if isinstance(block, dict) and block.get("type") == "text"
+            )
+        if not report:
+            tool_parts = [
+                str(m.content)
+                for m in state["messages"]
+                if getattr(m, "type", "") == "tool" and m.content
+            ]
+            if tool_parts:
+                report = "\n\n".join(tool_parts[-3:])
+        if not report and rounds > MAX_TOOL_ROUNDS:
+            report = "Analysis report unavailable for this run."
 
         return {
             "messages": [result],
             "sentiment_report": report,
+            "social_rounds": rounds,
         }
 
     return social_media_analyst_node
